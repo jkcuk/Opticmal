@@ -11,7 +11,8 @@
 <body>
 
 <h2>Light Propagation (Angular Spectrum)</h2>
-<canvas id="canvas" width="256" height="256"></canvas><br>
+<canvas id="canvas1" width="256" height="256"></canvas><br>
+<canvas id="canvas2" width="256" height="256"></canvas><br>
 <button onclick="run()">Propagate</button>
 
 <script>
@@ -112,8 +113,8 @@ function propagate(field, dx, dy, wavelength, z) {
 }
 
 // --- Visualization ---
-function drawIntensity(field) {
-  const canvas = document.getElementById("canvas");
+function drawIntensity(field, canvasName) {
+  const canvas = document.getElementById(canvasName);
   const ctx = canvas.getContext("2d");
   const Ny = field.length, Nx = field[0].length;
 
@@ -146,7 +147,7 @@ function drawIntensity(field) {
 
 // --- Main ---
 function run() {
-  const Nx = 128, Ny = 128;
+  const Nx = 256, Ny = 256;
   const dx = 10e-6, dy = 10e-6;
   const wavelength = 633e-9;
   const z = 0.01;
@@ -164,13 +165,12 @@ function run() {
     }
   }
 
-  drawIntensity(field);
+  drawIntensity(field, "canvas1");
 
   // propagate
-  setTimeout(() => {
-    let out = propagate(field, dx, dy, wavelength, z);
-    drawIntensity(out);
-  }, 100);
+  let out = propagate(field, dx, dy, wavelength, z);
+
+  drawIntensity(out, "canvas2");
 }
 </script>
 
