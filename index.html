@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Wave Propagation Demo</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; }
+    canvas { border: 1px solid black; }
+  </style>
+</head>
+<body>
+
+<h2>Light Propagation (Angular Spectrum)</h2>
+<canvas id="canvas" width="256" height="256"></canvas><br>
+<button onclick="run()">Propagate</button>
+
+<script>
+// --- Complex numbers ---
+function complex(re, im) { return { re, im }; }
+
+function cMul(a, b) {
+  return complex(a.re*b.re - a.im*b.im,
+                 a.re*b.im + a.im*b.re);
+}
+
+function cExp(phi) {
+  return complex(Math.cos(phi), Math.sin(phi));
+}
+
+// --- Slow FFT (educational only) ---
+function fft1D(arr) {
+  const N = arr.length, out = new Array(N);
+  for (let k = 0; k < N; k++) {
+    let sum = complex(0, 0);
+    for (let n = 0; n < N; n++) {
+      let angle = -2*Math.PI*k*n/N;
+      let w = complex(Math.cos(angle), Math.sin(angle));
+      sum.re += arr[n].re*w.re - arr[n].im*w.im;
+      sum.im += arr[n].re*w.im + arr[n].im*w.re;
+    }
+    out[k] = sum;
+  }
+  return out;
+}
+
+function ifft1D(arr) {
+  const N = arr.length, out = new Array(N);
+  for (let k = 0; k < N; k++) {
+    let sum = complex(0, 0);
+    for (let n = 0; n < N; n++) {
+      let angle = 2*Math.PI*k*n/N;
+      let w = complex(Math.cos(angle), Math.sin(angle));
+      sum.re += arr[n].re*w.re - arr[n].im*w.im;
+      sum.im += arr[n].re*w.im + arr[n].im*w.re;
+    }
+    out[k] = complex(sum.re/N, sum.im/N);
+  }
+  return out;
+}
+
+function fft2D(field) {
+  let temp = field.map(row => fft1D(row));
+  const Ny = field.length, Nx = field[0].length;
+  let out = Array.from({length: Ny}, () => new Array(Nx));
+
+  for (let x = 0; x < Nx; x++) {
+    let col = temp.map(row => row[x]);
+    let colFFT = fft1D(col);
+    for (let y = 0; y < Ny; y++) out[y][x] = colFFT[y];
+  }
+  return out;
+}
+
+function ifft2D(field) {
+  let temp = field.map(row => ifft1D(row));
+  const Ny = field.length, Nx = field[0].length;
+  let out = Array.from({length: Ny}, () => new Array(Nx));
+
+  for (let x = 0; x < Nx; x++) {
+    let col = temp.map(row => row[x]);
+    let colFFT = ifft1D(col);
+    for (let y = 0; y < Ny; y++) out[y][x] = colFFT[y];
+  }
+  return out;
+}
+
+// --- Propagation ---
+function propagate(field, dx, dy, wavelength, z) {
+  const Ny = field.length, Nx = field[0].length;
+  const k = 2 * Math.PI / wavelength;
+
+  let F = fft2D(field);
+
+  for (let y = 0; y < Ny; y++) {
+    for (let x = 0; x < Nx; x++) {
+
+      let fx = (x - Nx/2) / (Nx * dx);
+      let fy = (y - Ny/2) / (Ny * dy);
+
+      let term = 1 - (wavelength*fx)**2 - (wavelength*fy)**2;
+
+      if (term >= 0) {
+        let phase = k * z * Math.sqrt(term);
+        F[y][x] = cMul(F[y][x], cExp(phase));
+      } else {
+        F[y][x] = complex(0, 0);
+      }
+    }
+  }
+
+  return ifft2D(F);
+}
+
+// --- Visualization ---
+function drawIntensity(field) {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const Ny = field.length, Nx = field[0].length;
+
+  let img = ctx.createImageData(Nx, Ny);
+
+  // find max intensity
+  let maxI = 0;
+  for (let y=0;y<Ny;y++){
+    for (let x=0;x<Nx;x++){
+      let I = field[y][x].re**2 + field[y][x].im**2;
+      if (I > maxI) maxI = I;
+    }
+  }
+
+  for (let y=0;y<Ny;y++){
+    for (let x=0;x<Nx;x++){
+      let I = field[y][x].re**2 + field[y][x].im**2;
+      let v = Math.sqrt(I / maxI) * 255;
+
+      let i = (y*Nx + x)*4;
+      img.data[i] = v;
+      img.data[i+1] = v;
+      img.data[i+2] = v;
+      img.data[i+3] = 255;
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+}
+
+// --- Main ---
+function run() {
+  const Nx = 128, Ny = 128;
+  const dx = 10e-6, dy = 10e-6;
+  const wavelength = 633e-9;
+  const z = 0.01;
+
+  let field = [];
+
+  // Gaussian beam
+  for (let y=0;y<Ny;y++){
+    field[y] = [];
+    for (let x=0;x<Nx;x++){
+      let X = (x - Nx/2)*dx;
+      let Y = (y - Ny/2)*dy;
+      let r2 = X*X + Y*Y;
+      field[y][x] = complex(Math.exp(-r2/(1e-6)), 0);
+    }
+  }
+
+  drawIntensity(field);
+
+  // propagate
+  setTimeout(() => {
+    let out = propagate(field, dx, dy, wavelength, z);
+    drawIntensity(out);
+  }, 100);
+}
+</script>
+
+</body>
+</html>
